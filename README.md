@@ -24,9 +24,9 @@ Field reference: [DATA_GUIDE.md](DATA_GUIDE.md) · 中文字段说明：[数据�
 - **[Order book](https://outcometick.com/polymarket-order-book-data) snapshots** — full depth on both sides
 - **Trades** — price, size, side, millisecond timestamp
 - **[Chainlink settlement streams](https://outcometick.com/chainlink-settlement-data)** — the per-second price, TWAP30s and TWAP60s
-- Every asset we collect, 5-minute and 15-minute markets, the latest 90 days
+- Every asset we collect, 5-minute and 15-minute markets; the 90 days up to the purchase date (a fixed window)
 
-> **中文：** 市场信息（开盘价、结算结果）、盘口快照（完整深度）、逐笔成交、Chainlink 逐秒价与 TWAP30s / TWAP60s 结算流；全部币种、5 分钟 / 15 分钟市场、最近 90 天。
+> **中文：** 市场信息（开盘价、结算结果）、盘口快照（完整深度）、逐笔成交、Chainlink 逐秒价与 TWAP30s / TWAP60s 结算流；全部币种、5 分钟 / 15 分钟市场；下单时最近 90 天（固定区间）。
 
 ## Files in this sample / 样本包含的文件
 
