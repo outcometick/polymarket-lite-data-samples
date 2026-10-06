@@ -1,0 +1,82 @@
+# Data Guide
+
+(中文版见 数据使用说明.md)
+
+## Layout
+
+The unpacked sample has exactly the layout of the paid archive:
+
+```
+polymarket-lite-data-samples/
+  data/chainlink/daily/prices/BTCUSD/BTCUSD-prices-<date>.csv.gz
+  data/chainlink-twap-30s/daily/prices/BTCUSD/BTCUSD-twap30s-prices-<date>.csv.gz
+  data/chainlink-twap-60s/daily/prices/BTCUSD/BTCUSD-twap60s-prices-<date>.csv.gz
+  data/polymarket/daily/markets/BTC-5m/BTC-5m-markets-<date>.jsonl.gz
+  data/polymarket/daily/book/BTC-5m/BTC-5m-book-<date>.jsonl.gz
+  data/polymarket/daily/last_trade_price/BTC-5m/BTC-5m-last_trade_price-<date>.jsonl.gz
+```
+
+## <SYMBOL>-prices-<date>.csv.gz — Chainlink settlement price
+
+| column | meaning |
+|---|---|
+| feed_ts_ms | price event time (ms, second-aligned) |
+| value | price as float (convenience) |
+| full_accuracy_value | exact price: integer string scaled by 1e18 — divide by 1e18 |
+| server_ts_ms | relay server send time |
+| recv_ms | collector receive time |
+
+Note: two rows in the same second with different values = a same-second feed correction; the later recv_ms wins.
+
+Excel users: full_accuracy_value exceeds Excel's 15-digit number limit and will display as scientific notation if you double-click the file. Either read the value column instead, or import via Data -> From Text/CSV and set the full_accuracy_value column type to Text.
+
+## <SERIES>-markets-<date>.jsonl.gz — per-market metadata and settlement outcome
+
+| field | meaning |
+|---|---|
+| slug | market id; suffix = slot start (unix sec) |
+| start_sec / end_sec | slot boundaries (unix sec) |
+| interval_sec | 300 = 5-minute market, 900 = 15-minute |
+| token_ids | CLOB token ids, [Up, Down] order |
+| resolved | settlement label present |
+| outcome_prices | ["1","0"] Up won, ["0","1"] Down won, ["0.5","0.5"] split |
+| strike_value | priceToBeat: integer string scaled by 1e18; null when no tick existed at the start second |
+| raw | full Gamma API market object |
+
+Note: settlement rule **for markets through 2026-08-06** (before the TWAP switch below) = Up wins iff the latest feed tick at or before end_sec (the value in effect at the close; the feed runs ~1Hz, so it is not always exactly on end_sec) is greater than **or equal to** strike_value — the official market rules read "greater than or equal to", so a tie settles Up. A few markets fall in feed gaps (no tick near end_sec, visible from the ticks' own timestamps) or have a null strike_value; those cannot be recomputed from the feed alone. Markets crossing UTC midnight appear in both days' files — dedupe by slug.
+
+Settlement source change: markets from **2026-08-07 00:00 UTC** onward (those with `raw.cryptoMarketConfig.twapEnabled = true`) settle on the Chainlink **TWAP streams** instead — Up wins iff the TWAP stream's value at the close ≥ its value at the open.
+
+**Which stream settles a market is written on the market itself**, in `raw.cryptoMarketConfig.twapLookbackSeconds` — read it per market rather than inferring it from the date, because upstream has moved it once already:
+
+- from 2026-08-07: 5-minute markets settled on the 30s-lookback stream, 15-minute markets on the 60s stream
+- from 2026-08-13 upstream began migrating 5-minute markets to the 60s stream, completing on 2026-08-14; **since 2026-08-15 every market, 5-minute and 15-minute alike, settles on the 60s stream**
+
+The `twap30s` stream is still collected and still ships with every day of the dataset, but it no longer decides any market's outcome. The full dataset ships both as `twap30s`/`twap60s` price files (same columns as `prices`, coverage from 2026-08-08) — recompute post-switch markets from the stream the market's own config names, not from the instantaneous `prices` files.
+
+## <SERIES>-book-<date>.jsonl.gz — full-depth order book snapshots
+
+| field | meaning |
+|---|---|
+| slug | market |
+| asset_id | token the snapshot belongs to (Up or Down) |
+| event_ts_ms | CLOB frame time |
+| recv_ms | collector receive time |
+| payload.bids[] / payload.asks[] | all price levels, {price, size} strings |
+
+Note: book state at time t = the token's latest snapshot with recv_ms <= t.
+
+## <SERIES>-last_trade_price-<date>.jsonl.gz — trade prints
+
+Trades exactly as the venue's WebSocket broadcast them: stored unthrottled and never sampled, but not reconciled against on-chain fills.
+
+| field | meaning |
+|---|---|
+| payload.price / size | trade price / size |
+| payload.side | BUY = taker bought |
+| payload.asset_id | traded token |
+| payload.fee_rate_bps | fee rate (basis points) |
+| payload.timestamp | trade time (ms) |
+| recv_ms | collector receive time |
+
+## samples/manifest.json — per-file row counts and sha256 checksums for this sample
